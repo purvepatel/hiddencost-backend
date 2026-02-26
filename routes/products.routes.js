@@ -1,10 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const controller = require('../controllers/products.controller');
+const productsController = require('../controllers/products.controller');
+const { protect } = require('../middleware/auth');  
 
-router.get('/', controller.getAllProducts);
-router.post('/', controller.createProduct);
-router.put('/:id', controller.updateProduct);
-router.delete('/:id', controller.deleteProduct);
+// All routes require authentication
+router.use(protect);  
+
+router.get('/', productsController.getAllProducts);
+router.post('/', productsController.createProduct);
+router.put('/:id', productsController.updateProduct);
+router.delete('/:id', productsController.deleteProduct);
 
 module.exports = router;

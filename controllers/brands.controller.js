@@ -19,3 +19,26 @@ exports.createBrand = (req, res) => {
     }
   );
 };
+
+exports.updateBrand = (req, res) => {
+  const { id } = req.params;
+  const { name, category, description } = req.body;
+
+  db.query(
+    'UPDATE brands SET name = ?, category = ?, description = ? WHERE id = ?',
+    [name, category, description, id],
+    err => {
+      if (err) return res.status(500).json(err);
+      res.json({ message: 'Brand updated' });
+    }
+  );
+};
+
+exports.deleteBrand = (req, res) => {
+  const { id } = req.params;
+
+  db.query('DELETE FROM brands WHERE id = ?', [id], err => {
+    if (err) return res.status(500).json(err);
+    res.json({ message: 'Brand deleted' });
+  });
+};
