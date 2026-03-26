@@ -1,0 +1,83 @@
+Sprint 1 – Backend Practical Lab Submission
+Student: Purve Patel
+Course: Open Source Full Stack Development
+
+--------------------------------------------------
+1. GitHub Repository
+--------------------------------------------------
+https://github.com/purvepatel/hiddencost-backend.git
+
+The repository contains the complete Sprint 1 backend code.
+The project follows an MVC-style structure with separate folders
+for routes, controllers, and database configuration.
+All development work was committed incrementally with descriptive
+commit messages. The .env file is excluded using .gitignore to
+protect sensitive credentials.
+
+--------------------------------------------------
+2. Live Deployment (Render)
+--------------------------------------------------
+https://hiddencost-backend.onrender.com
+
+The backend is deployed to Render as a public web service.
+The application is accessible via a live URL and is not
+restricted to localhost. Environment variables are configured
+directly in Render for database credentials and port settings.
+The deployed application displays “HiddenCost API is running”
+at the root endpoint, confirming successful deployment.
+
+--------------------------------------------------
+3. How to Run the Project Locally
+--------------------------------------------------
+1. Clone the repository from GitHub:
+   git clone https://github.com/purvepatel/hiddencost-backend
+
+2. Navigate into the project directory:
+   cd hiddencost-backend
+
+3. Install dependencies:
+   npm install
+
+4. Create a local .env file with the required environment
+   variables (database host, port, user, password, database
+   name, and port).
+
+5. Start the development server:
+   npm run dev
+
+6. The server runs locally on:
+   http://localhost:5000
+
+--------------------------------------------------
+4. How the Project Was Pushed to GitHub
+--------------------------------------------------
+Development followed standard Git workflow practices:
+
+- Code changes were staged using:
+  git add .
+
+- Changes were committed incrementally using:
+  git commit -m "descriptive commit message"
+
+- Commits were pushed to the remote repository using:
+  git push
+
+This resulted in a healthy GitHub commit history that
+demonstrates ongoing development throughout Sprint 1.
+
+--------------------------------------------------
+5. How the Project Was Deployed to Render
+--------------------------------------------------
+1. A new Web Service was created on Render.
+2. The GitHub repository was connected directly to Render.
+3. Build command was set to:
+   npm install
+4. Start command was set to:
+   npm start
+5. Environment variables were configured directly in Render
+   (database credentials and port).
+6. The service was deployed and tested using the public URL.
+
+--------------------------------------------------
+End of Submission
+--------------------------------------------------

@@ -1,0 +1,30 @@
+<<<<<<< HEAD
+# Dependencies
+node_modules/
+
+# Production build
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Testing
+coverage/
+=======
+node_modules
+.env
+>>>>>>> 0faa7873fbe504e844100556c9cb30da2f93d1c2

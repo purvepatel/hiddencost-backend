@@ -1,0 +1,332 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { productsAPI, costFactorsAPI, formatCurrency, calculateTotalCost } from '../utils/api';
+import './Products.css';
+
+// ============================================================
+// ProductDetail — View product + manage cost factors (CLO3, CLO4)
+// ============================================================
+
+const FREQUENCY_OPTIONS = ['monthly', 'yearly', 'one-time'];
+
+function ProductDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [product, setProduct] = useState(null);
+  const [costFactors, setCostFactors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [years, setYears] = useState(5);
+
+  // Cost factor form state
+  const [showCfForm, setShowCfForm] = useState(false);
+  const [editingCf, setEditingCf] = useState(null);
+  const [cfForm, setCfForm] = useState({ name: '', amount: '', frequency: 'monthly', description: '' });
+  const [cfError, setCfError] = useState('');
+  const [cfSaving, setCfSaving] = useState(false);
+  const [deletingCfId, setDeletingCfId] = useState(null);
+
+  const fetchProduct = useCallback(async () => {
+    try {
+      const [productRes, cfRes] = await Promise.all([
+        productsAPI.getById(id),
+        costFactorsAPI.getByProduct(id),
+      ]);
+      setProduct(productRes.data?.data);
+      setCostFactors(cfRes.data?.data || []);
+    } catch (err) {
+      setError('Failed to load product.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { fetchProduct(); }, [fetchProduct]);
+
+  // Cost calculations
+  const basePrice = parseFloat(product?.base_price || 0);
+  const totalCost = calculateTotalCost(product, costFactors, years);
+  const hiddenCost = totalCost - basePrice;
+
+  const openCfCreate = () => {
+    setEditingCf(null);
+    setCfForm({ name: '', amount: '', frequency: 'monthly', description: '' });
+    setCfError('');
+    setShowCfForm(true);
+  };
+
+  const openCfEdit = (cf) => {
+    setEditingCf(cf);
+    setCfForm({ name: cf.name, amount: cf.amount, frequency: cf.frequency, description: cf.description || '' });
+    setCfError('');
+    setShowCfForm(true);
+  };
+
+  const cancelCfForm = () => {
+    setShowCfForm(false);
+    setEditingCf(null);
+    setCfError('');
+  };
+
+  const handleCfChange = (e) => {
+    setCfForm({ ...cfForm, [e.target.name]: e.target.value });
+    setCfError('');
+  };
+
+  const handleCfSave = async (e) => {
+    e.preventDefault();
+    if (!cfForm.name.trim()) { setCfError('Name is required'); return; }
+    if (!cfForm.amount || isNaN(cfForm.amount)) { setCfError('Valid amount is required'); return; }
+
+    setCfSaving(true);
+    try {
+      if (editingCf) {
+        await costFactorsAPI.update(editingCf.id, cfForm);
+      } else {
+        await costFactorsAPI.create({ ...cfForm, product_id: parseInt(id) });
+      }
+      await fetchProduct();
+      cancelCfForm();
+    } catch (err) {
+      setCfError(err.response?.data?.message || 'Failed to save cost factor.');
+    } finally {
+      setCfSaving(false);
+    }
+  };
+
+  const handleCfDelete = async (cfId) => {
+    if (!window.confirm('Remove this cost factor?')) return;
+    setDeletingCfId(cfId);
+    try {
+      await costFactorsAPI.delete(cfId);
+      setCostFactors((prev) => prev.filter((cf) => cf.id !== cfId));
+    } catch (err) {
+      setError('Failed to delete cost factor.');
+    } finally {
+      setDeletingCfId(null);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!window.confirm('Delete this product and ALL its cost factors? This cannot be undone.')) return;
+    try {
+      await productsAPI.delete(id);
+      navigate('/products');
+    } catch (err) {
+      setError('Failed to delete product.');
+    }
+  };
+
+  if (loading) return <div className="loading-center"><div className="spinner" /><span>Loading product...</span></div>;
+  if (!product) return <div className="container"><div className="alert alert-error">Product not found.</div></div>;
+
+  return (
+    <div className="product-detail-page">
+      <div className="container">
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="product-detail-grid">
+          {/* Main Column */}
+          <div>
+            {/* Product Header */}
+            <div className="card" style={{ marginBottom: '20px' }}>
+              <div className="detail-hero">
+                <div>
+                  <div className="detail-meta" style={{ marginBottom: '8px' }}>
+                    {product.brand_name && <span className="badge badge-info">{product.brand_name}</span>}
+                    {product.category && <span className="badge badge-accent">{product.category}</span>}
+                    <span className={`badge ${product.is_active ? 'badge-success' : 'badge-danger'}`}>
+                      {product.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <h1 className="detail-title">{product.name}</h1>
+                  {product.model_number && (
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Model: {product.model_number}</div>
+                  )}
+                </div>
+                <div className="detail-actions">
+                  <Link to={`/products/${id}/edit`} className="btn">Edit</Link>
+                  <button className="btn btn-danger" onClick={handleDeleteProduct}>Delete</button>
+                </div>
+              </div>
+
+              <div className="detail-price-section">
+                <div className="price-label">Base Price</div>
+                <div className="price-value">{formatCurrency(product.base_price)}</div>
+              </div>
+
+              {product.description && (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '12px' }}>
+                  {product.description}
+                </p>
+              )}
+            </div>
+
+            {/* Cost Factors */}
+            <div className="card">
+              <div className="cf-header">
+                <h3>Cost Factors ({costFactors.length})</h3>
+                <button className="btn btn-primary btn-sm" onClick={openCfCreate}>
+                  + Add Cost
+                </button>
+              </div>
+
+              {/* Inline form */}
+              {showCfForm && (
+                <div className="cf-form">
+                  <form onSubmit={handleCfSave}>
+                    {cfError && <div className="alert alert-error">{cfError}</div>}
+                    <div className="form-group">
+                      <label className="form-label">Cost Name *</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={cfForm.name}
+                        onChange={handleCfChange}
+                        className="form-input"
+                        placeholder="e.g. Monthly Insurance"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="cf-form-row">
+                      <div className="form-group">
+                        <label className="form-label">Amount (CAD) *</label>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={cfForm.amount}
+                          onChange={handleCfChange}
+                          className="form-input"
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Frequency *</label>
+                        <select name="frequency" value={cfForm.frequency} onChange={handleCfChange} className="form-select">
+                          {FREQUENCY_OPTIONS.map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Notes</label>
+                      <input
+                        type="text"
+                        name="description"
+                        value={cfForm.description}
+                        onChange={handleCfChange}
+                        className="form-input"
+                        placeholder="Optional note..."
+                      />
+                    </div>
+                    <div className="cf-form-actions">
+                      <button type="button" className="btn btn-sm" onClick={cancelCfForm}>Cancel</button>
+                      <button type="submit" className="btn btn-primary btn-sm" disabled={cfSaving}>
+                        {cfSaving ? 'Saving...' : (editingCf ? 'Update' : 'Add Cost Factor')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {costFactors.length === 0 && !showCfForm ? (
+                <div className="empty-state" style={{ padding: '32px 0' }}>
+                  <h3>No cost factors</h3>
+                  <p>Add recurring costs like insurance, fuel, maintenance, subscriptions...</p>
+                </div>
+              ) : (
+                <div className="cf-list" style={{ marginTop: showCfForm ? '16px' : '0' }}>
+                  {costFactors.map((cf) => (
+                    <div key={cf.id} className="cf-item">
+                      <div className="cf-item-left">
+                        <div className="cf-name">{cf.name}</div>
+                        <div className="cf-frequency">{cf.frequency}</div>
+                        {cf.description && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{cf.description}</div>
+                        )}
+                      </div>
+                      <div className="cf-amount">{formatCurrency(cf.amount)}</div>
+                      <div className="cf-actions">
+                        <button className="btn btn-sm" onClick={() => openCfEdit(cf)}>Edit</button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleCfDelete(cf.id)}
+                          disabled={deletingCfId === cf.id}
+                        >
+                          {deletingCfId === cf.id ? '...' : 'Del'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar — Cost Summary */}
+          <div>
+            <div className="card cost-summary-card">
+              <h3>Total Cost of Ownership</h3>
+
+              <div className="year-selector">
+                {[1, 3, 5, 10].map((y) => (
+                  <button
+                    key={y}
+                    className={`btn btn-sm year-btn ${years === y ? 'active' : ''}`}
+                    onClick={() => setYears(y)}
+                  >
+                    {y}yr
+                  </button>
+                ))}
+              </div>
+
+              <div className="cost-row">
+                <span className="cost-row-label">Base Price</span>
+                <span className="cost-row-value">{formatCurrency(basePrice)}</span>
+              </div>
+
+              {costFactors.map((cf) => {
+                let annualCost;
+                if (cf.frequency === 'monthly') annualCost = parseFloat(cf.amount) * 12 * years;
+                else if (cf.frequency === 'yearly') annualCost = parseFloat(cf.amount) * years;
+                else annualCost = parseFloat(cf.amount);
+                return (
+                  <div className="cost-row" key={cf.id}>
+                    <span className="cost-row-label">{cf.name}</span>
+                    <span className="cost-row-value" style={{ color: 'var(--danger)' }}>
+                      +{formatCurrency(annualCost)}
+                    </span>
+                  </div>
+                );
+              })}
+
+              <div className="cost-row" style={{ marginTop: '8px' }}>
+                <span className="cost-row-label">Hidden Costs Total</span>
+                <span className="cost-row-value" style={{ color: 'var(--danger)' }}>+{formatCurrency(hiddenCost)}</span>
+              </div>
+
+              <div className="cost-total">
+                <div className="cost-row">
+                  <span className="cost-row-label">{years}-Year Total</span>
+                  <span className="cost-row-value">{formatCurrency(totalCost)}</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <Link to="/compare" className="btn" style={{ width: '100%', justifyContent: 'center' }}>
+                  Compare Products →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ProductDetail;
