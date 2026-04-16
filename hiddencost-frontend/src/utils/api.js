@@ -4,37 +4,74 @@ import axios from 'axios';
 // API Service — Centralized API calls (CLO4)
 // ============================================================
 
+// Configure axios defaults
+const axiosInstance = axios.create({
+  baseURL: '/api', // Proxy will forward to backend
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add JWT token to all requests
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('hc_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Handle responses and errors
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Unauthorized - clear token and redirect to login
+      localStorage.removeItem('hc_token');
+      localStorage.removeItem('hc_user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // === BRANDS ===
 export const brandsAPI = {
-  getAll: () => axios.get('/brands'),
-  getById: (id) => axios.get(`/brands/${id}`),
-  create: (data) => axios.post('/brands', data),
-  update: (id, data) => axios.put(`/brands/${id}`, data),
-  delete: (id) => axios.delete(`/brands/${id}`),
+  getAll: () => axiosInstance.get('/brands'),
+  getById: (id) => axiosInstance.get(`/brands/${id}`),
+  create: (data) => axiosInstance.post('/brands', data),
+  update: (id, data) => axiosInstance.put(`/brands/${id}`, data),
+  delete: (id) => axiosInstance.delete(`/brands/${id}`),
 };
 
 // === PRODUCTS ===
 export const productsAPI = {
-  getAll: () => axios.get('/products'),
-  getById: (id) => axios.get(`/products/${id}`),
-  create: (data) => axios.post('/products', data),
-  update: (id, data) => axios.put(`/products/${id}`, data),
-  delete: (id) => axios.delete(`/products/${id}`),
+  getAll: () => axiosInstance.get('/products'),
+  getById: (id) => axiosInstance.get(`/products/${id}`),
+  create: (data) => axiosInstance.post('/products', data),
+  update: (id, data) => axiosInstance.put(`/products/${id}`, data),
+  delete: (id) => axiosInstance.delete(`/products/${id}`),
 };
 
 // === COST FACTORS ===
 export const costFactorsAPI = {
-  getAll: () => axios.get('/cost-factors'),
-  getByProduct: (productId) => axios.get(`/cost-factors/product/${productId}`),
-  getById: (id) => axios.get(`/cost-factors/${id}`),
-  create: (data) => axios.post('/cost-factors', data),
-  update: (id, data) => axios.put(`/cost-factors/${id}`, data),
-  delete: (id) => axios.delete(`/cost-factors/${id}`),
+  getAll: () => axiosInstance.get('/cost-factors'),
+  getByProduct: (productId) => axiosInstance.get(`/cost-factors/product/${productId}`),
+  getById: (id) => axiosInstance.get(`/cost-factors/${id}`),
+  create: (data) => axiosInstance.post('/cost-factors', data),
+  update: (id, data) => axiosInstance.put(`/cost-factors/${id}`, data),
+  delete: (id) => axiosInstance.delete(`/cost-factors/${id}`),
 };
 
 // === AUTH ===
 export const authAPI = {
-  getProfile: () => axios.get('/auth/me'),
+  register: (data) => axiosInstance.post('/auth/register', data),
+  login: (data) => axiosInstance.post('/auth/login', data),
+  getProfile: () => axiosInstance.get('/auth/me'),
 };
 
 // Format currency
