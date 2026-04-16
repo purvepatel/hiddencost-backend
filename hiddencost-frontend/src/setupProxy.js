@@ -4,7 +4,7 @@ module.exports = function (app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+      target: 'https://hiddencost-backend.onrender.com',
       changeOrigin: true,
       logLevel: 'silent',          // suppresses proxy noise in terminal
       onError: (err, req, res) => {
