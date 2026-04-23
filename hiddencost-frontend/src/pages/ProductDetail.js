@@ -1,11 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { productsAPI, costFactorsAPI, formatCurrency, calculateTotalCost } from '../utils/api';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { calculateTotalCost, costFactorsAPI, formatCurrency, productsAPI } from '../utils/api';
 import './Products.css';
-
-// ============================================================
-// ProductDetail — View product + manage cost factors (CLO3, CLO4)
-// ============================================================
 
 const FREQUENCY_OPTIONS = ['monthly', 'yearly', 'one-time'];
 
@@ -18,8 +14,6 @@ function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [years, setYears] = useState(5);
-
-  // Cost factor form state
   const [showCfForm, setShowCfForm] = useState(false);
   const [editingCf, setEditingCf] = useState(null);
   const [cfForm, setCfForm] = useState({ name: '', amount: '', frequency: 'monthly', description: '' });
@@ -29,65 +23,90 @@ function ProductDetail() {
 
   const fetchProduct = useCallback(async () => {
     try {
-      const [productRes, cfRes] = await Promise.all([
+      const [productResponse, costFactorResponse] = await Promise.all([
         productsAPI.getById(id),
         costFactorsAPI.getByProduct(id),
       ]);
-      setProduct(productRes.data?.data);
-      setCostFactors(cfRes.data?.data || []);
+
+      setProduct(productResponse.data);
+      setCostFactors(costFactorResponse.data || []);
+      setError('');
     } catch (err) {
-      setError('Failed to load product.');
+      setError('Failed to load product details.');
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { fetchProduct(); }, [fetchProduct]);
+  useEffect(() => {
+    fetchProduct();
+  }, [fetchProduct]);
 
-  // Cost calculations
   const basePrice = parseFloat(product?.base_price || 0);
   const totalCost = calculateTotalCost(product, costFactors, years);
   const hiddenCost = totalCost - basePrice;
 
-  const openCfCreate = () => {
+  const openCreateForm = () => {
     setEditingCf(null);
     setCfForm({ name: '', amount: '', frequency: 'monthly', description: '' });
     setCfError('');
     setShowCfForm(true);
   };
 
-  const openCfEdit = (cf) => {
-    setEditingCf(cf);
-    setCfForm({ name: cf.name, amount: cf.amount, frequency: cf.frequency, description: cf.description || '' });
+  const openEditForm = (costFactor) => {
+    setEditingCf(costFactor);
+    setCfForm({
+      name: costFactor.cost_name,
+      amount: costFactor.cost_amount,
+      frequency: costFactor.frequency,
+      description: costFactor.cost_type || '',
+    });
     setCfError('');
     setShowCfForm(true);
   };
 
-  const cancelCfForm = () => {
+  const handleCfChange = (event) => {
+    const { name, value } = event.target;
+    setCfForm((current) => ({ ...current, [name]: value }));
+    setCfError('');
+  };
+
+  const closeCostForm = () => {
     setShowCfForm(false);
     setEditingCf(null);
     setCfError('');
   };
 
-  const handleCfChange = (e) => {
-    setCfForm({ ...cfForm, [e.target.name]: e.target.value });
-    setCfError('');
-  };
+  const handleCfSave = async (event) => {
+    event.preventDefault();
 
-  const handleCfSave = async (e) => {
-    e.preventDefault();
-    if (!cfForm.name.trim()) { setCfError('Name is required'); return; }
-    if (!cfForm.amount || isNaN(cfForm.amount)) { setCfError('Valid amount is required'); return; }
+    if (!cfForm.name.trim()) {
+      setCfError('Cost name is required.');
+      return;
+    }
+
+    if (!cfForm.amount || Number.isNaN(Number(cfForm.amount))) {
+      setCfError('A valid amount is required.');
+      return;
+    }
 
     setCfSaving(true);
     try {
+      const payload = {
+        name: cfForm.name.trim(),
+        amount: parseFloat(cfForm.amount),
+        frequency: cfForm.frequency,
+        description: cfForm.description.trim(),
+      };
+
       if (editingCf) {
-        await costFactorsAPI.update(editingCf.id, cfForm);
+        await costFactorsAPI.update(editingCf.id, payload);
       } else {
-        await costFactorsAPI.create({ ...cfForm, product_id: parseInt(id) });
+        await costFactorsAPI.create({ ...payload, product_id: parseInt(id, 10) });
       }
+
       await fetchProduct();
-      cancelCfForm();
+      closeCostForm();
     } catch (err) {
       setCfError(err.response?.data?.message || 'Failed to save cost factor.');
     } finally {
@@ -95,31 +114,47 @@ function ProductDetail() {
     }
   };
 
-  const handleCfDelete = async (cfId) => {
+  const handleCfDelete = async (costFactorId) => {
     if (!window.confirm('Remove this cost factor?')) return;
-    setDeletingCfId(cfId);
+
+    setDeletingCfId(costFactorId);
     try {
-      await costFactorsAPI.delete(cfId);
-      setCostFactors((prev) => prev.filter((cf) => cf.id !== cfId));
+      await costFactorsAPI.delete(costFactorId);
+      setCostFactors((current) => current.filter((costFactor) => costFactor.id !== costFactorId));
     } catch (err) {
-      setError('Failed to delete cost factor.');
+      setError(err.response?.data?.message || 'Failed to delete cost factor.');
     } finally {
       setDeletingCfId(null);
     }
   };
 
   const handleDeleteProduct = async () => {
-    if (!window.confirm('Delete this product and ALL its cost factors? This cannot be undone.')) return;
+    if (!window.confirm('Delete this product and all of its cost factors?')) return;
+
     try {
       await productsAPI.delete(id);
       navigate('/products');
     } catch (err) {
-      setError('Failed to delete product.');
+      setError(err.response?.data?.message || 'Failed to delete product.');
     }
   };
 
-  if (loading) return <div className="loading-center"><div className="spinner" /><span>Loading product...</span></div>;
-  if (!product) return <div className="container"><div className="alert alert-error">Product not found.</div></div>;
+  if (loading) {
+    return (
+      <div className="loading-center">
+        <div className="spinner" />
+        <span>Loading product...</span>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="container">
+        <div className="alert alert-error">Product not found.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="product-detail-page">
@@ -127,23 +162,15 @@ function ProductDetail() {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="product-detail-grid">
-          {/* Main Column */}
           <div>
-            {/* Product Header */}
             <div className="card" style={{ marginBottom: '20px' }}>
               <div className="detail-hero">
                 <div>
                   <div className="detail-meta" style={{ marginBottom: '8px' }}>
                     {product.brand_name && <span className="badge badge-info">{product.brand_name}</span>}
-                    {product.category && <span className="badge badge-accent">{product.category}</span>}
-                    <span className={`badge ${product.is_active ? 'badge-success' : 'badge-danger'}`}>
-                      {product.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    {product.product_type && <span className="badge badge-accent">{product.product_type}</span>}
                   </div>
                   <h1 className="detail-title">{product.name}</h1>
-                  {product.model_number && (
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Model: {product.model_number}</div>
-                  )}
                 </div>
                 <div className="detail-actions">
                   <Link to={`/products/${id}/edit`} className="btn">Edit</Link>
@@ -163,20 +190,19 @@ function ProductDetail() {
               )}
             </div>
 
-            {/* Cost Factors */}
             <div className="card">
               <div className="cf-header">
                 <h3>Cost Factors ({costFactors.length})</h3>
-                <button className="btn btn-primary btn-sm" onClick={openCfCreate}>
-                  + Add Cost
+                <button className="btn btn-primary btn-sm" onClick={openCreateForm}>
+                  Add Cost
                 </button>
               </div>
 
-              {/* Inline form */}
               {showCfForm && (
                 <div className="cf-form">
                   <form onSubmit={handleCfSave}>
                     {cfError && <div className="alert alert-error">{cfError}</div>}
+
                     <div className="form-group">
                       <label className="form-label">Cost Name *</label>
                       <input
@@ -185,13 +211,13 @@ function ProductDetail() {
                         value={cfForm.name}
                         onChange={handleCfChange}
                         className="form-input"
-                        placeholder="e.g. Monthly Insurance"
-                        autoFocus
+                        placeholder="Example: Insurance"
                       />
                     </div>
+
                     <div className="cf-form-row">
                       <div className="form-group">
-                        <label className="form-label">Amount (CAD) *</label>
+                        <label className="form-label">Amount *</label>
                         <input
                           type="number"
                           name="amount"
@@ -203,15 +229,24 @@ function ProductDetail() {
                           min="0"
                         />
                       </div>
+
                       <div className="form-group">
                         <label className="form-label">Frequency *</label>
-                        <select name="frequency" value={cfForm.frequency} onChange={handleCfChange} className="form-select">
-                          {FREQUENCY_OPTIONS.map((f) => (
-                            <option key={f} value={f}>{f}</option>
+                        <select
+                          name="frequency"
+                          value={cfForm.frequency}
+                          onChange={handleCfChange}
+                          className="form-select"
+                        >
+                          {FREQUENCY_OPTIONS.map((frequency) => (
+                            <option key={frequency} value={frequency}>
+                              {frequency}
+                            </option>
                           ))}
                         </select>
                       </div>
                     </div>
+
                     <div className="form-group">
                       <label className="form-label">Notes</label>
                       <input
@@ -220,13 +255,16 @@ function ProductDetail() {
                         value={cfForm.description}
                         onChange={handleCfChange}
                         className="form-input"
-                        placeholder="Optional note..."
+                        placeholder="Optional note"
                       />
                     </div>
+
                     <div className="cf-form-actions">
-                      <button type="button" className="btn btn-sm" onClick={cancelCfForm}>Cancel</button>
+                      <button type="button" className="btn btn-sm" onClick={closeCostForm}>
+                        Cancel
+                      </button>
                       <button type="submit" className="btn btn-primary btn-sm" disabled={cfSaving}>
-                        {cfSaving ? 'Saving...' : (editingCf ? 'Update' : 'Add Cost Factor')}
+                        {cfSaving ? 'Saving...' : editingCf ? 'Update Cost' : 'Add Cost'}
                       </button>
                     </div>
                   </form>
@@ -235,29 +273,31 @@ function ProductDetail() {
 
               {costFactors.length === 0 && !showCfForm ? (
                 <div className="empty-state" style={{ padding: '32px 0' }}>
-                  <h3>No cost factors</h3>
-                  <p>Add recurring costs like insurance, fuel, maintenance, subscriptions...</p>
+                  <h3>No cost factors yet</h3>
+                  <p>Add monthly, yearly, or one-time costs to reveal the real ownership total.</p>
                 </div>
               ) : (
                 <div className="cf-list" style={{ marginTop: showCfForm ? '16px' : '0' }}>
-                  {costFactors.map((cf) => (
-                    <div key={cf.id} className="cf-item">
+                  {costFactors.map((costFactor) => (
+                    <div key={costFactor.id} className="cf-item">
                       <div className="cf-item-left">
-                        <div className="cf-name">{cf.name}</div>
-                        <div className="cf-frequency">{cf.frequency}</div>
-                        {cf.description && (
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{cf.description}</div>
+                        <div className="cf-name">{costFactor.cost_name}</div>
+                        <div className="cf-frequency">{costFactor.frequency}</div>
+                        {costFactor.cost_type && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {costFactor.cost_type}
+                          </div>
                         )}
                       </div>
-                      <div className="cf-amount">{formatCurrency(cf.amount)}</div>
+                      <div className="cf-amount">{formatCurrency(costFactor.cost_amount)}</div>
                       <div className="cf-actions">
-                        <button className="btn btn-sm" onClick={() => openCfEdit(cf)}>Edit</button>
+                        <button className="btn btn-sm" onClick={() => openEditForm(costFactor)}>Edit</button>
                         <button
                           className="btn btn-sm btn-danger"
-                          onClick={() => handleCfDelete(cf.id)}
-                          disabled={deletingCfId === cf.id}
+                          onClick={() => handleCfDelete(costFactor.id)}
+                          disabled={deletingCfId === costFactor.id}
                         >
-                          {deletingCfId === cf.id ? '...' : 'Del'}
+                          {deletingCfId === costFactor.id ? 'Deleting...' : 'Delete'}
                         </button>
                       </div>
                     </div>
@@ -267,19 +307,18 @@ function ProductDetail() {
             </div>
           </div>
 
-          {/* Sidebar — Cost Summary */}
           <div>
             <div className="card cost-summary-card">
               <h3>Total Cost of Ownership</h3>
 
               <div className="year-selector">
-                {[1, 3, 5, 10].map((y) => (
+                {[1, 3, 5, 10].map((value) => (
                   <button
-                    key={y}
-                    className={`btn btn-sm year-btn ${years === y ? 'active' : ''}`}
-                    onClick={() => setYears(y)}
+                    key={value}
+                    className={`btn btn-sm year-btn ${years === value ? 'active' : ''}`}
+                    onClick={() => setYears(value)}
                   >
-                    {y}yr
+                    {value}yr
                   </button>
                 ))}
               </div>
@@ -289,24 +328,26 @@ function ProductDetail() {
                 <span className="cost-row-value">{formatCurrency(basePrice)}</span>
               </div>
 
-              {costFactors.map((cf) => {
-                let annualCost;
-                if (cf.frequency === 'monthly') annualCost = parseFloat(cf.amount) * 12 * years;
-                else if (cf.frequency === 'yearly') annualCost = parseFloat(cf.amount) * years;
-                else annualCost = parseFloat(cf.amount);
+              {costFactors.map((costFactor) => {
+                let total = parseFloat(costFactor.cost_amount);
+                if (costFactor.frequency === 'monthly') total *= 12 * years;
+                else if (costFactor.frequency === 'yearly') total *= years;
+
                 return (
-                  <div className="cost-row" key={cf.id}>
-                    <span className="cost-row-label">{cf.name}</span>
+                  <div className="cost-row" key={costFactor.id}>
+                    <span className="cost-row-label">{costFactor.cost_name}</span>
                     <span className="cost-row-value" style={{ color: 'var(--danger)' }}>
-                      +{formatCurrency(annualCost)}
+                      +{formatCurrency(total)}
                     </span>
                   </div>
                 );
               })}
 
               <div className="cost-row" style={{ marginTop: '8px' }}>
-                <span className="cost-row-label">Hidden Costs Total</span>
-                <span className="cost-row-value" style={{ color: 'var(--danger)' }}>+{formatCurrency(hiddenCost)}</span>
+                <span className="cost-row-label">Hidden Costs</span>
+                <span className="cost-row-value" style={{ color: 'var(--danger)' }}>
+                  +{formatCurrency(hiddenCost)}
+                </span>
               </div>
 
               <div className="cost-total">
@@ -318,7 +359,7 @@ function ProductDetail() {
 
               <div style={{ marginTop: '20px' }}>
                 <Link to="/compare" className="btn" style={{ width: '100%', justifyContent: 'center' }}>
-                  Compare Products →
+                  Compare Products
                 </Link>
               </div>
             </div>

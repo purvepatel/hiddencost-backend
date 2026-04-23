@@ -6,7 +6,7 @@ import axios from 'axios';
 
 // Configure axios defaults
 const axiosInstance = axios.create({
-  baseURL: '/api', // Proxy will forward to backend
+  baseURL: process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}` : '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -87,7 +87,7 @@ export const calculateTotalCost = (product, costFactors, years = 5) => {
   const base = parseFloat(product?.base_price || 0);
   let recurring = 0;
   costFactors?.forEach((cf) => {
-    const amount = parseFloat(cf.amount || 0);
+    const amount = parseFloat(cf.cost_amount ?? cf.amount ?? 0);
     if (cf.frequency === 'monthly') recurring += amount * 12 * years;
     else if (cf.frequency === 'yearly') recurring += amount * years;
     else if (cf.frequency === 'one-time') recurring += amount;

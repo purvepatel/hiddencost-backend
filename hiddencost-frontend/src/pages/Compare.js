@@ -1,10 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { productsAPI, costFactorsAPI, formatCurrency, calculateTotalCost } from '../utils/api';
+import React, { useEffect, useState } from 'react';
+import { calculateTotalCost, costFactorsAPI, formatCurrency, productsAPI } from '../utils/api';
 import './Compare.css';
-
-// ============================================================
-// Compare — Side-by-side product cost comparison (CLO3, CLO4)
-// ============================================================
 
 function Compare() {
   const [products, setProducts] = useState([]);
@@ -12,60 +8,73 @@ function Compare() {
   const [selected, setSelected] = useState([null, null]);
   const [years, setYears] = useState(5);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productRes, cfRes] = await Promise.all([
+        const [productsResponse, costFactorsResponse] = await Promise.all([
           productsAPI.getAll(),
           costFactorsAPI.getAll(),
         ]);
-        setProducts(productRes.data?.data || []);
-        setCostFactors(cfRes.data?.data || []);
+        setProducts(productsResponse.data || []);
+        setCostFactors(costFactorsResponse.data || []);
       } catch (err) {
-        console.error('Compare fetch error:', err);
+        setError('Failed to load products for comparison.');
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
   const getProductCostFactors = (productId) =>
-    costFactors.filter((cf) => cf.product_id === parseInt(productId));
+    costFactors.filter((costFactor) => costFactor.product_id === parseInt(productId, 10));
 
-  const getSelectedProduct = (idx) =>
-    products.find((p) => p.id === parseInt(selected[idx]));
+  const getSelectedProduct = (index) =>
+    products.find((product) => product.id === parseInt(selected[index], 10));
 
-  const getTotalCost = (idx) => {
-    const p = getSelectedProduct(idx);
-    if (!p) return 0;
-    return calculateTotalCost(p, getProductCostFactors(p.id), years);
+  const getTotalCost = (index) => {
+    const product = getSelectedProduct(index);
+    if (!product) return 0;
+    return calculateTotalCost(product, getProductCostFactors(product.id), years);
   };
 
-  const handleSelect = (idx, value) => {
-    const newSelected = [...selected];
-    newSelected[idx] = value;
-    setSelected(newSelected);
+  const handleSelect = (index, value) => {
+    setSelected((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
   };
 
   const addSlot = () => {
-    if (selected.length < 4) setSelected([...selected, null]);
+    if (selected.length < 4) {
+      setSelected((current) => [...current, null]);
+    }
   };
 
-  const removeSlot = (idx) => {
+  const removeSlot = (index) => {
     if (selected.length <= 2) return;
-    setSelected(selected.filter((_, i) => i !== idx));
+    setSelected((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
-  // Find winner (lowest total cost)
-  const costs = selected.map((_, idx) => {
-    const p = getSelectedProduct(idx);
-    return p ? getTotalCost(idx) : Infinity;
+  const costs = selected.map((_, index) => {
+    const product = getSelectedProduct(index);
+    return product ? getTotalCost(index) : Infinity;
   });
-  const minCost = Math.min(...costs.filter((c) => c !== Infinity));
+  const validCosts = costs.filter((cost) => cost !== Infinity);
+  const minCost = validCosts.length > 0 ? Math.min(...validCosts) : Infinity;
 
-  if (loading) return <div className="loading-center"><div className="spinner" /><span>Loading...</span></div>;
+  if (loading) {
+    return (
+      <div className="loading-center">
+        <div className="spinner" />
+        <span>Loading comparison data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="compare-page">
@@ -73,98 +82,98 @@ function Compare() {
         <div className="page-header">
           <div>
             <h1>Compare Products</h1>
-            <p>See the true cost side-by-side — beyond the sticker price</p>
+            <p>See ownership totals side by side before you decide.</p>
           </div>
         </div>
 
-        {/* Controls */}
+        {error && <div className="alert alert-error">{error}</div>}
+
         <div className="compare-controls card">
           <div className="controls-left">
-            <span className="control-label">Time Horizon:</span>
+            <span className="control-label">Time Horizon</span>
             <div className="year-selector">
-              {[1, 3, 5, 10].map((y) => (
+              {[1, 3, 5, 10].map((value) => (
                 <button
-                  key={y}
-                  className={`btn btn-sm year-btn ${years === y ? 'active' : ''}`}
-                  onClick={() => setYears(y)}
+                  key={value}
+                  className={`btn btn-sm year-btn ${years === value ? 'active' : ''}`}
+                  onClick={() => setYears(value)}
                 >
-                  {y} Year{y > 1 ? 's' : ''}
+                  {value} Year{value > 1 ? 's' : ''}
                 </button>
               ))}
             </div>
           </div>
           {selected.length < 4 && (
-            <button className="btn btn-sm" onClick={addSlot}>+ Add Column</button>
+            <button className="btn btn-sm" onClick={addSlot}>Add Column</button>
           )}
         </div>
 
-        {/* Comparison Grid */}
         <div className={`compare-grid cols-${selected.length}`}>
-          {selected.map((selectedId, idx) => {
-            const product = getSelectedProduct(idx);
-            const productCfs = product ? getProductCostFactors(product.id) : [];
-            const total = product ? getTotalCost(idx) : 0;
-            const isWinner = product && total === minCost && costs.filter((c) => c !== Infinity).length > 1;
+          {selected.map((selectedId, index) => {
+            const product = getSelectedProduct(index);
+            const productCostFactors = product ? getProductCostFactors(product.id) : [];
+            const total = product ? getTotalCost(index) : 0;
             const hiddenCost = product ? total - parseFloat(product.base_price) : 0;
+            const isWinner = product && total === minCost && validCosts.length > 1;
 
             return (
-              <div key={idx} className={`compare-col ${isWinner ? 'compare-winner' : ''}`}>
-                {/* Column Header */}
+              <div key={index} className={`compare-col ${isWinner ? 'compare-winner' : ''}`}>
                 <div className="compare-col-header">
-                  {isWinner && (
-                    <div className="winner-badge">⚡ Best Value</div>
-                  )}
+                  {isWinner && <div className="winner-badge">Best Value</div>}
                   <select
                     className="form-select compare-select"
                     value={selectedId || ''}
-                    onChange={(e) => handleSelect(idx, e.target.value)}
+                    onChange={(event) => handleSelect(index, event.target.value)}
                   >
-                    <option value="">— Select Product —</option>
-                    {products.map((p) => (
+                    <option value="">Select Product</option>
+                    {products.map((productOption) => (
                       <option
-                        key={p.id}
-                        value={p.id}
-                        disabled={selected.includes(String(p.id)) && String(p.id) !== String(selectedId)}
+                        key={productOption.id}
+                        value={productOption.id}
+                        disabled={
+                          selected.includes(String(productOption.id)) &&
+                          String(productOption.id) !== String(selectedId)
+                        }
                       >
-                        {p.name}
+                        {productOption.name}
                       </option>
                     ))}
                   </select>
                   {selected.length > 2 && (
-                    <button className="remove-col" onClick={() => removeSlot(idx)} title="Remove column">✕</button>
+                    <button className="remove-col" onClick={() => removeSlot(index)} title="Remove column">
+                      x
+                    </button>
                   )}
                 </div>
 
                 {product ? (
                   <div className="compare-col-body">
-                    {/* Product Info */}
                     <div className="compare-product-name">{product.name}</div>
-                    {product.brand_name && (
-                      <span className="badge badge-info">{product.brand_name}</span>
-                    )}
+                    <div className="detail-meta">
+                      {product.brand_name && <span className="badge badge-info">{product.brand_name}</span>}
+                      {product.product_type && <span className="badge badge-accent">{product.product_type}</span>}
+                    </div>
 
-                    {/* Base Price */}
                     <div className="compare-section">
                       <div className="compare-section-label">Base Price</div>
                       <div className="compare-base-price">{formatCurrency(product.base_price)}</div>
                     </div>
 
-                    {/* Cost Factors */}
                     <div className="compare-section">
                       <div className="compare-section-label">Hidden Costs ({years}yr)</div>
-                      {productCfs.length === 0 ? (
-                        <div className="compare-no-cf">No costs tracked</div>
+                      {productCostFactors.length === 0 ? (
+                        <div className="compare-no-cf">No tracked costs</div>
                       ) : (
                         <div className="compare-cf-list">
-                          {productCfs.map((cf) => {
-                            let cfTotal;
-                            if (cf.frequency === 'monthly') cfTotal = parseFloat(cf.amount) * 12 * years;
-                            else if (cf.frequency === 'yearly') cfTotal = parseFloat(cf.amount) * years;
-                            else cfTotal = parseFloat(cf.amount);
+                          {productCostFactors.map((costFactor) => {
+                            let factorTotal = parseFloat(costFactor.cost_amount);
+                            if (costFactor.frequency === 'monthly') factorTotal *= 12 * years;
+                            else if (costFactor.frequency === 'yearly') factorTotal *= years;
+
                             return (
-                              <div key={cf.id} className="compare-cf-row">
-                                <span className="compare-cf-name">{cf.name}</span>
-                                <span className="compare-cf-amount">+{formatCurrency(cfTotal)}</span>
+                              <div key={costFactor.id} className="compare-cf-row">
+                                <span className="compare-cf-name">{costFactor.cost_name}</span>
+                                <span className="compare-cf-amount">+{formatCurrency(factorTotal)}</span>
                               </div>
                             );
                           })}
@@ -172,7 +181,6 @@ function Compare() {
                       )}
                     </div>
 
-                    {/* Totals */}
                     <div className="compare-totals">
                       <div className="compare-hidden-total">
                         <span>Hidden Costs</span>
@@ -186,7 +194,7 @@ function Compare() {
                   </div>
                 ) : (
                   <div className="compare-empty-col">
-                    <div>Select a product<br />to compare</div>
+                    <div>Select a product to compare</div>
                   </div>
                 )}
               </div>
@@ -194,18 +202,12 @@ function Compare() {
           })}
         </div>
 
-        {/* Savings insight */}
-        {costs.filter((c) => c !== Infinity).length >= 2 && (
+        {validCosts.length >= 2 && (
           <div className="compare-insight card">
-            <div className="insight-icon">💡</div>
+            <div className="insight-icon">Insight</div>
             <div>
-              <strong>Insight:</strong>{' '}
-              {(() => {
-                const validCosts = costs.filter((c) => c !== Infinity);
-                const maxCost = Math.max(...validCosts);
-                const savings = maxCost - minCost;
-                return `Over ${years} years, the cheapest option saves you ${formatCurrency(savings)} compared to the most expensive — that's ${formatCurrency(savings / years)}/year.`;
-              })()}
+              <strong>Cost difference:</strong>{' '}
+              {formatCurrency(Math.max(...validCosts) - minCost)} separates the cheapest option from the most expensive one over {years} years.
             </div>
           </div>
         )}

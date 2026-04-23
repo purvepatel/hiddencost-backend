@@ -1,9 +1,9 @@
 {
   "name": "hiddencost-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "scripts": {
     "start": "node server.js",

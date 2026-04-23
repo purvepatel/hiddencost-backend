@@ -7,6 +7,7 @@ const { protect } = require('../middleware/auth');
 router.use(protect);  
 
 router.get('/', productsController.getAllProducts);
+router.get('/:id', productsController.getProductById);
 router.post('/', productsController.createProduct);
 router.put('/:id', productsController.updateProduct);
 router.delete('/:id', productsController.deleteProduct);

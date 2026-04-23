@@ -30,24 +30,41 @@ exports.register = async (req, res) => {
         User.findByEmail(email, async (err, users) => {
             if (err) return res.status(500).json({ success: false, error: err.message });
             
-            if (users.length > 0) {
+            if (users && users.length > 0) {
                 return res.status(409).json({
                     success: false,
                     message: 'User with this email already exists'
                 });
             }
 
-            // Create user
-            await User.create({ username, email, password, first_name, last_name }, (err, result) => {
-                if (err) return res.status(500).json({ success: false, error: err.message });
+            User.findByUsername(username, async (usernameErr, existingUsers) => {
+                if (usernameErr) return res.status(500).json({ success: false, error: usernameErr.message });
 
-                const token = generateToken(result.insertId);
+                if (existingUsers && existingUsers.length > 0) {
+                    return res.status(409).json({
+                        success: false,
+                        message: 'Username is already taken'
+                    });
+                }
 
-                res.status(201).json({
-                    success: true,
-                    message: 'User registered successfully',
-                    token,
-                    user: { id: result.insertId, username, email, first_name, last_name }
+                await User.create({ username, email, password, first_name, last_name }, (createErr, result) => {
+                    if (createErr) return res.status(500).json({ success: false, error: createErr.message });
+
+                    const token = generateToken(result.insertId);
+
+                    res.status(201).json({
+                        success: true,
+                        message: 'User registered successfully',
+                        token,
+                        user: {
+                            id: result.insertId,
+                            username,
+                            email,
+                            first_name: first_name || null,
+                            last_name: last_name || null,
+                            role: 'user'
+                        }
+                    });
                 });
             });
         });

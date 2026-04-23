@@ -1,13 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { productsAPI, brandsAPI } from '../utils/api';
+import { brandsAPI, productsAPI } from '../utils/api';
 import './Products.css';
 
-// ============================================================
-// ProductForm — Create & Edit product form (CLO3, CLO4)
-// ============================================================
-
-const CATEGORIES = ['Electronics', 'Appliances', 'Automotive', 'Software', 'Clothing', 'Tools', 'Furniture', 'Other'];
+const PRODUCT_TYPES = ['Electronics', 'Automotive', 'Software', 'Appliance', 'Insurance', 'Service', 'Subscription', 'Other'];
 
 function ProductForm() {
   const { id } = useParams();
@@ -15,8 +11,11 @@ function ProductForm() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    name: '', brand_id: '', category: '', model_number: '',
-    base_price: '', description: '', is_active: true,
+    name: '',
+    brand_id: '',
+    product_type: '',
+    base_price: '',
+    description: '',
   });
   const [brands, setBrands] = useState([]);
   const [errors, setErrors] = useState({});
@@ -24,55 +23,56 @@ function ProductForm() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
 
-  // Load brands + existing product if editing
   useEffect(() => {
     const load = async () => {
       try {
-        const brandsRes = await brandsAPI.getAll();
-        setBrands(brandsRes.data?.data || []);
+        const brandsResponse = await brandsAPI.getAll();
+        setBrands(brandsResponse.data || []);
 
         if (isEdit) {
-          const productRes = await productsAPI.getById(id);
-          const p = productRes.data?.data;
-          if (p) {
-            setFormData({
-              name: p.name || '',
-              brand_id: p.brand_id || '',
-              category: p.category || '',
-              model_number: p.model_number || '',
-              base_price: p.base_price || '',
-              description: p.description || '',
-              is_active: p.is_active !== false,
-            });
-          }
+          const productResponse = await productsAPI.getById(id);
+          const product = productResponse.data;
+          setFormData({
+            name: product.name || '',
+            brand_id: String(product.brand_id || ''),
+            product_type: product.product_type || '',
+            base_price: product.base_price || '',
+            description: product.description || '',
+          });
         }
       } catch (err) {
-        setServerError('Failed to load data.');
+        setServerError('Failed to load form data.');
       } finally {
         setFetching(false);
       }
     };
+
     load();
   }, [id, isEdit]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
-    setErrors({ ...errors, [name]: '' });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+    setErrors((current) => ({ ...current, [name]: '' }));
     setServerError('');
   };
 
   const validate = () => {
-    const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = 'Product name is required';
-    if (!formData.base_price) newErrors.base_price = 'Base price is required';
-    else if (isNaN(formData.base_price) || parseFloat(formData.base_price) < 0)
-      newErrors.base_price = 'Must be a valid non-negative number';
-    return newErrors;
+    const nextErrors = {};
+
+    if (!formData.name.trim()) nextErrors.name = 'Product name is required';
+    if (!formData.brand_id) nextErrors.brand_id = 'Brand is required';
+    if (!formData.product_type.trim()) nextErrors.product_type = 'Product type is required';
+    if (!formData.base_price) nextErrors.base_price = 'Base price is required';
+    else if (Number.isNaN(Number(formData.base_price)) || Number(formData.base_price) < 0) {
+      nextErrors.base_price = 'Base price must be a valid non-negative number';
+    }
+
+    return nextErrors;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -82,17 +82,19 @@ function ProductForm() {
     setLoading(true);
     try {
       const payload = {
-        ...formData,
+        name: formData.name.trim(),
+        brand_id: parseInt(formData.brand_id, 10),
+        product_type: formData.product_type.trim(),
         base_price: parseFloat(formData.base_price),
-        brand_id: formData.brand_id || null,
+        description: formData.description.trim(),
       };
 
       if (isEdit) {
         await productsAPI.update(id, payload);
         navigate(`/products/${id}`);
       } else {
-        const res = await productsAPI.create(payload);
-        navigate(`/products/${res.data?.data?.id || ''}`);
+        const response = await productsAPI.create(payload);
+        navigate(`/products/${response.data?.id}`);
       }
     } catch (err) {
       setServerError(err.response?.data?.message || 'Failed to save product.');
@@ -105,7 +107,7 @@ function ProductForm() {
     return (
       <div className="loading-center">
         <div className="spinner" />
-        <span>Loading...</span>
+        <span>Loading form...</span>
       </div>
     );
   }
@@ -116,9 +118,9 @@ function ProductForm() {
         <div className="page-header">
           <div>
             <h1>{isEdit ? 'Edit Product' : 'Add Product'}</h1>
-            <p>{isEdit ? 'Update product details' : 'Add a new product to track its costs'}</p>
+            <p>{isEdit ? 'Update product details and pricing' : 'Create a product record to start cost tracking'}</p>
           </div>
-          <button className="btn" onClick={() => navigate(-1)}>← Back</button>
+          <button className="btn" onClick={() => navigate(-1)}>Back</button>
         </div>
 
         <div className="form-card card">
@@ -136,108 +138,92 @@ function ProductForm() {
                   value={formData.name}
                   onChange={handleChange}
                   className={`form-input ${errors.name ? 'input-error' : ''}`}
-                  placeholder="e.g. Toyota Camry 2024"
-                  autoFocus
+                  placeholder="Example: Toyota Camry 2024"
                 />
                 {errors.name && <span className="form-error">{errors.name}</span>}
               </div>
 
-              <div className="form-row-3">
+              <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Brand</label>
-                  <select name="brand_id" value={formData.brand_id} onChange={handleChange} className="form-select">
-                    <option value="">— No Brand —</option>
-                    {brands.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select name="category" value={formData.category} onChange={handleChange} className="form-select">
-                    <option value="">— Select Category —</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Model Number</label>
-                  <input
-                    type="text"
-                    name="model_number"
-                    value={formData.model_number}
+                  <label className="form-label">Brand *</label>
+                  <select
+                    name="brand_id"
+                    value={formData.brand_id}
                     onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. CAM-2024-XSE"
-                  />
+                    className={`form-select ${errors.brand_id ? 'input-error' : ''}`}
+                  >
+                    <option value="">Select a brand</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.brand_id && <span className="form-error">{errors.brand_id}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Product Type *</label>
+                  <select
+                    name="product_type"
+                    value={formData.product_type}
+                    onChange={handleChange}
+                    className={`form-select ${errors.product_type ? 'input-error' : ''}`}
+                  >
+                    <option value="">Select a type</option>
+                    {PRODUCT_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.product_type && <span className="form-error">{errors.product_type}</span>}
                 </div>
               </div>
             </div>
 
             <div className="form-section">
               <h3 className="form-section-title">Pricing</h3>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Base Price (CAD) *</label>
-                  <div className="input-prefix-wrap">
-                    <span className="input-prefix">$</span>
-                    <input
-                      type="number"
-                      name="base_price"
-                      value={formData.base_price}
-                      onChange={handleChange}
-                      className={`form-input input-prefixed ${errors.base_price ? 'input-error' : ''}`}
-                      placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                    />
-                  </div>
-                  {errors.base_price && <span className="form-error">{errors.base_price}</span>}
+              <div className="form-group">
+                <label className="form-label">Base Price (CAD) *</label>
+                <div className="input-prefix-wrap">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    name="base_price"
+                    value={formData.base_price}
+                    onChange={handleChange}
+                    className={`form-input input-prefixed ${errors.base_price ? 'input-error' : ''}`}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                  />
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label">Status</label>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="is_active"
-                      checked={formData.is_active}
-                      onChange={handleChange}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Active product</span>
-                  </label>
-                </div>
+                {errors.base_price && <span className="form-error">{errors.base_price}</span>}
               </div>
             </div>
 
             <div className="form-section">
               <h3 className="form-section-title">Description</h3>
               <div className="form-group">
-                <label className="form-label">Notes / Description</label>
+                <label className="form-label">Notes</label>
                 <textarea
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
                   className="form-textarea"
-                  placeholder="Additional details about this product..."
+                  placeholder="Add useful context about the product..."
                   rows={4}
                 />
               </div>
             </div>
 
             <div className="form-actions">
-              <button type="button" className="btn" onClick={() => navigate(-1)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => navigate(-1)}>
+                Cancel
+              </button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? (
-                  <><div className="spinner" /> Saving...</>
-                ) : (
-                  isEdit ? 'Update Product' : 'Create Product'
-                )}
+                {loading ? 'Saving...' : isEdit ? 'Update Product' : 'Create Product'}
               </button>
             </div>
           </form>

@@ -1,2 +1,4 @@
 node_modules
 .env
+database/hiddencost.db
+hiddencost-backend/

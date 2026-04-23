@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: hiddencost-backend
+    env: node
+    plan: free
+    branch: main
+    root: .
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5000
+
+  - type: static
+    name: hiddencost-frontend
+    env: static
+    plan: free
+    branch: main
+    root: hiddencost-frontend
+    buildCommand: npm install && npm run build
+    publishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://hiddencost-backend-3.onrender.com/api

@@ -1,11 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { brandsAPI } from '../utils/api';
 import './Brands.css';
-
-// ============================================================
-// Brands — Full CRUD with modal form (CLO3, CLO4)
-// ============================================================
 
 function Brands() {
   const [brands, setBrands] = useState([]);
@@ -13,18 +8,18 @@ function Brands() {
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
-  const [formData, setFormData] = useState({ name: '', country: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', category: '', description: '' });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // Fetch all brands
   const fetchBrands = async () => {
     try {
-      const res = await brandsAPI.getAll();
-      setBrands(res.data?.data || []);
+      const response = await brandsAPI.getAll();
+      setBrands(response.data || []);
+      setError('');
     } catch (err) {
-      setError('Failed to load brands. Make sure you are logged in.');
+      setError('Failed to load brands.');
     } finally {
       setLoading(false);
     }
@@ -34,43 +29,44 @@ function Brands() {
     fetchBrands();
   }, []);
 
-  // Open modal for create
   const openCreate = () => {
     setEditingBrand(null);
-    setFormData({ name: '', country: '', description: '' });
+    setFormData({ name: '', category: '', description: '' });
     setFormError('');
     setShowModal(true);
   };
 
-  // Open modal for edit
   const openEdit = (brand) => {
     setEditingBrand(brand);
-    setFormData({ name: brand.name, country: brand.country || '', description: brand.description || '' });
+    setFormData({
+      name: brand.name || '',
+      category: brand.category || '',
+      description: brand.description || '',
+    });
     setFormError('');
     setShowModal(true);
   };
 
-  // Close modal
   const closeModal = () => {
     setShowModal(false);
     setEditingBrand(null);
-    setFormData({ name: '', country: '', description: '' });
+    setFormData({ name: '', category: '', description: '' });
     setFormError('');
   };
 
-  // Handle form input
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
     setFormError('');
   };
 
-  // Save (create or update)
-  const handleSave = async (e) => {
-    e.preventDefault();
+  const handleSave = async (event) => {
+    event.preventDefault();
     if (!formData.name.trim()) {
       setFormError('Brand name is required.');
       return;
     }
+
     setSaving(true);
     try {
       if (editingBrand) {
@@ -87,13 +83,13 @@ function Brands() {
     }
   };
 
-  // Delete
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this brand? Products linked to it may also be affected.')) return;
+
     setDeletingId(id);
     try {
       await brandsAPI.delete(id);
-      setBrands(brands.filter((b) => b.id !== id));
+      setBrands((current) => current.filter((brand) => brand.id !== id));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete brand.');
     } finally {
@@ -107,10 +103,10 @@ function Brands() {
         <div className="page-header">
           <div>
             <h1>Brands</h1>
-            <p>Manage manufacturers and brands for your products</p>
+            <p>Manage the manufacturers available when you create products.</p>
           </div>
           <button className="btn btn-primary" onClick={openCreate}>
-            + Add Brand
+            Add Brand
           </button>
         </div>
 
@@ -123,11 +119,10 @@ function Brands() {
           </div>
         ) : brands.length === 0 ? (
           <div className="empty-state card">
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏷️</div>
             <h3>No brands yet</h3>
-            <p>Add your first brand to get started</p>
+            <p>Create your first brand so products can be categorized correctly.</p>
             <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={openCreate}>
-              + Add Brand
+              Add Brand
             </button>
           </div>
         ) : (
@@ -135,34 +130,24 @@ function Brands() {
             {brands.map((brand) => (
               <div key={brand.id} className="brand-card card">
                 <div className="brand-card-header">
-                  <div className="brand-avatar">
-                    {brand.name.charAt(0).toUpperCase()}
-                  </div>
+                  <div className="brand-avatar">{brand.name.charAt(0).toUpperCase()}</div>
                   <div className="brand-info">
                     <h3 className="brand-name">{brand.name}</h3>
-                    {brand.country && (
-                      <span className="badge badge-info">{brand.country}</span>
-                    )}
+                    {brand.category && <span className="badge badge-info">{brand.category}</span>}
                   </div>
                 </div>
 
-                {brand.description && (
-                  <p className="brand-desc">{brand.description}</p>
-                )}
+                {brand.description && <p className="brand-desc">{brand.description}</p>}
 
                 <div className="brand-meta">
-                  <span className="brand-products">
-                    {brand.product_count || 0} product{brand.product_count !== 1 ? 's' : ''}
-                  </span>
+                  <span className="brand-products">{brand.category || 'General'}</span>
                   <span className="brand-date">
-                    {new Date(brand.created_at).toLocaleDateString('en-CA')}
+                    {brand.created_at ? new Date(brand.created_at).toLocaleDateString('en-CA') : 'New'}
                   </span>
                 </div>
 
                 <div className="brand-actions">
-                  <button className="btn btn-sm" onClick={() => openEdit(brand)}>
-                    Edit
-                  </button>
+                  <button className="btn btn-sm" onClick={() => openEdit(brand)}>Edit</button>
                   <button
                     className="btn btn-sm btn-danger"
                     onClick={() => handleDelete(brand.id)}
@@ -177,13 +162,12 @@ function Brands() {
         )}
       </div>
 
-      {/* Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <h2>{editingBrand ? 'Edit Brand' : 'Add Brand'}</h2>
-              <button className="modal-close" onClick={closeModal}>✕</button>
+              <button className="modal-close" onClick={closeModal}>x</button>
             </div>
 
             {formError && <div className="alert alert-error">{formError}</div>}
@@ -197,21 +181,22 @@ function Brands() {
                   value={formData.name}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="e.g. Toyota"
-                  autoFocus
+                  placeholder="Example: Toyota"
                 />
               </div>
+
               <div className="form-group">
-                <label className="form-label">Country of Origin</label>
+                <label className="form-label">Category</label>
                 <input
                   type="text"
-                  name="country"
-                  value={formData.country}
+                  name="category"
+                  value={formData.category}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="e.g. Japan"
+                  placeholder="Example: Automotive"
                 />
               </div>
+
               <div className="form-group">
                 <label className="form-label">Description</label>
                 <textarea
@@ -219,15 +204,15 @@ function Brands() {
                   value={formData.description}
                   onChange={handleChange}
                   className="form-textarea"
-                  placeholder="Brief description of the brand..."
                   rows={3}
+                  placeholder="Add a short description of the brand..."
                 />
               </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn" onClick={closeModal}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? <><div className="spinner" /> Saving...</> : (editingBrand ? 'Update Brand' : 'Create Brand')}
+                  {saving ? 'Saving...' : editingBrand ? 'Update Brand' : 'Create Brand'}
                 </button>
               </div>
             </form>
